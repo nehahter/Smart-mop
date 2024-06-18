@@ -6,28 +6,20 @@
 Servo myservo;
 
 String command;             // String to store app command state.
-int speedCar = 800;         // Speed range: 400 - 1023.
+int speedCar = 800;         // 400 - 1023.
 int speed_Coeff = 3;
 
 const char* ssid = "mana car";
 const char* password = "hehehuhu";
 ESP8266WebServer server(80);
 
-// Motor and servo pins
-#define ENA  14
-#define ENB  12
-#define IN_1 15
-#define IN_2 13
-#define IN_3  2
-#define IN_4  0
-#define MOP_PIN 5  // Assuming pin D1 for mop control
-
-// Ultrasonic Sensor Pins
-#define TRIG_PIN 10  // GPIO10
-#define ECHO_PIN 9   // GPIO9
-
-long duration;
-int distance;
+// Motor pins
+#define ENA   14  // Enable/speed motors Right        GPIO14(D5)
+#define ENB   12  // Enable/speed motors Left         GPIO12(D6)
+#define IN_1  15  // L298N in1 motors Right           GPIO15(D8)
+#define IN_2  13  // L298N in2 motors Right           GPIO13(D7)
+#define IN_3   2  // L298N in3 motors Left            GPIO2(D4)
+#define IN_4   0  // L298N in4 motors Left            GPIO0(D3)
 
 void servoControl() {
   for (int i = 0; i <= 180; i += 18) {
@@ -40,86 +32,86 @@ void servoControl() {
     delay(0.1);
   }
 }
+
+void stopServo() {
+  myservo.write(90);
+}
  
-void motorControl(int enPin, int in1Pin, int in2Pin, int speed, bool direction) {
+
+void motorControlFront(int enPin, int in1Pin, int in2Pin, int speed) {
+  digitalWrite(in1Pin, LOW);
+  digitalWrite(in2Pin, HIGH);
   analogWrite(enPin, speed);
-  digitalWrite(in1Pin, direction ? HIGH : LOW);
-  digitalWrite(in2Pin, direction ? LOW : HIGH);
-  
 }
 
-void goAhead() {
-  motorControl(ENA, IN_1, IN_2, speedCar, false);
-  motorControl(ENB, IN_3, IN_4, speedCar, false);
+void motorControlBack(int enPin, int in1Pin, int in2Pin, int speed) {
+  digitalWrite(in1Pin, HIGH);
+  digitalWrite(in2Pin, LOW);
+  analogWrite(enPin, speed);
 }
 
-void goBack() {
-  motorControl(ENA, IN_1, IN_2, speedCar, true);
-  motorControl(ENB, IN_3, IN_4, speedCar, true);
-}
+void goAhead(){ 
+      motorControlFront(ENA, IN_2, IN_1, speedCar);
+      motorControlFront(ENB, IN_3, IN_4, speedCar);
+  }
+
+void goBack(){ 
+      motorControlBack(ENA, IN_2, IN_1, speedCar);
+      motorControlBack(ENB, IN_3, IN_4, speedCar);
+  }
 
 void goRight() {
-  motorControl(ENA, IN_1, IN_2, speedCar, true);
-  motorControl(ENB, IN_3, IN_4, speedCar+200, false);
+  motorControlBack(ENA, IN_2, IN_1, speedCar - 400);
+  motorControlFront(ENB, IN_3, IN_4, speedCar); // Increase speed for turning
 }
 
 void goLeft() {
-  motorControl(ENA, IN_1, IN_2, speedCar+200, false);
-  motorControl(ENB, IN_3, IN_4, 0, true);
-}
-
-void goAheadRight() {
-  goRight();
-  goAhead();
+  motorControlFront(ENA, IN_2, IN_1, speedCar); // Increase speed for turning
+  motorControlBack(ENB, IN_3, IN_4, speedCar - 400 );
 }
 
 void goAheadLeft() {
-  goLeft();
-  goAhead();
+  motorControlFront(ENA, IN_1, IN_2, speedCar / speed_Coeff);
+  motorControlFront(ENB, IN_3, IN_4, speedCar + 200); // Increase speed for turning
 }
 
-void goBackRight() {
-  goRight();
-  goBack();
+void goAheadRight() {
+  motorControlFront(ENA, IN_1, IN_2, speedCar + 200); // Increase speed for turning
+  motorControlFront(ENB, IN_3, IN_4, speedCar / speed_Coeff);
 }
 
 void goBackLeft() {
-  goLeft();
-  goBack();
+  motorControlBack(ENA, IN_1, IN_2, speedCar / speed_Coeff);
+  motorControlBack(ENB, IN_3, IN_4, speedCar + 200); // Increase speed for turning
 }
 
-void stopRobot() {
-  analogWrite(ENA, 0);
-  analogWrite(ENB, 0);
+void goBackRight() {
+  motorControlBack(ENA, IN_1, IN_2, speedCar + 200); // Increase speed for turning
+  motorControlBack(ENB, IN_3, IN_4, speedCar / speed_Coeff);
 }
 
-// Function to control the mop. Argument is true to start and false to stop.
-void controlMop(bool start) {
-  digitalWrite(MOP_PIN, start ? HIGH : LOW);
-}
+void stopRobot(){  
 
-// Ultrasonic sensor function to measure distance
-int getDistance() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  duration = pulseIn(ECHO_PIN, HIGH);
-  distance = duration * 0.034 / 2;
-  return distance;
-}
+      digitalWrite(IN_1, LOW);
+      digitalWrite(IN_2, LOW);
+      analogWrite(ENA, speedCar);
 
-// void HTTP_handleRoot(void) {
-//   if (server.hasArg("State")) {
-//     Serial.println(server.arg("State"));
-//   }
-//   server.send(200, "text/html", "");
-//   delay(1);
-// }
+      digitalWrite(IN_3, LOW);
+      digitalWrite(IN_4, LOW);
+      analogWrite(ENB, speedCar);
+ }
+
+void HTTP_handleRoot(void) {
+  if (server.hasArg("State")) {
+    Serial.println(server.arg("State"));
+  }
+  server.send(200, "text/html", "");
+  delay(1);
+}
 
 void setup() {
   Serial.begin(115200);
+
   myservo.attach(D1);
   delay(100);
 
@@ -129,11 +121,6 @@ void setup() {
   pinMode(IN_2, OUTPUT);
   pinMode(IN_3, OUTPUT);
   pinMode(IN_4, OUTPUT);
-  pinMode(MOP_PIN, OUTPUT);  // Mop control setup
-
-  // Ultrasonic sensor setup
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
 
   // Connecting WiFi
   WiFi.mode(WIFI_AP);
@@ -149,8 +136,10 @@ void setup() {
   server.begin();
 }
 
-
 void loop() {
+  // Control the servo motor
+  // delay(1000);    // Add a delay to give the servo some time to move
+  // servoControl();
   server.handleClient();
 
   command = server.arg("State");
@@ -162,30 +151,25 @@ void loop() {
   else if (command == "G") goAheadLeft();
   else if (command == "J") goBackRight();
   else if (command == "H") goBackLeft();
-  else if (command == "0") speedCar = 400;
-  else if (command == "1") speedCar = 470;
-  else if (command == "2") speedCar = 540;
-  else if (command == "3") speedCar = 610;
-  else if (command == "4") speedCar = 680;
-  else if (command == "5") speedCar = 750;
-  else if (command == "6") speedCar = 820;
-  else if (command == "7") speedCar = 890;
-  else if (command == "8") speedCar = 960;
-  else if (command == "9") speedCar = 1023;
+  else if (command == "0") speedCar = 800;
+  else if (command == "1") speedCar = 800;
+  else if (command == "2") speedCar = 800;
+  else if (command == "3") speedCar = 800;
+  else if (command == "4") speedCar = 800;
+  else if (command == "5") speedCar = 800;
+  else if (command == "6") speedCar = 800;
+  else if (command == "7") speedCar = 800;
+  else if (command == "8") speedCar = 800;
+  else if (command == "9") speedCar = 800;
   else if (command == "S") stopRobot();
+  else if (command == "M") servoControl();
+  else if (command == "O") stopServo();
   else stopRobot();
-  servoControl();
-
-  if (command == "M") { 
-    controlMop(true);    // Start the mop
-  } else if (command == "N") {  // Another command for stopping the mop
-    controlMop(false);   // Stop the mop
-  }
-
-  // Example use of the ultrasonic sensor to stop the car if an obstacle is too close
-  int currentDistance = getDistance();
-  if (currentDistance < 20) {  // If an obstacle is closer than 20cm
-    stopRobot();  // Assume stopRobot() stops the car
-  }
+  //servoControl();
   
+
 }
+
+
+
+
